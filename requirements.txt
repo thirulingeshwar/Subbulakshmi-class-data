@@ -1,5 +1,4 @@
-Flask
-flask-cors
+flask
+flask_cors
 pymongo
-dnspython
-certifi
+gunicorn
