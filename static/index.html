@@ -22,6 +22,7 @@
             --danger: #ef4444;
             --success: #10b981;
             --warning: #f59e0b;
+            --info: #3b82f6;
             --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
             --radius-card: 1.25rem;
         }
@@ -206,6 +207,7 @@
         }
         .badge.present { background: #10b98120; color: #10b981; }
         .badge.absent { background: #ef444420; color: #ef4444; }
+        .badge.no-class { background: #3b82f620; color: #3b82f6; }
         .badge.fee-overdue { background: #ef444420; color: #ef4444; }
         .badge.fee-due-soon { background: #f59e0b20; color: #f59e0b; }
 
@@ -214,10 +216,15 @@
             border-radius: 2rem;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
         }
         .status-btn.present { background: var(--success); color: white; }
         .status-btn.absent { background: var(--danger); color: white; }
-        .status-btn.selected { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2), 0 0 0 4px var(--success); }
+        .status-btn.no-class { background: var(--info); color: white; }
+        .status-btn.selected { 
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 0 0 4px var(--success);
+            transform: scale(1.02);
+        }
 
         .timing-section {
             display: flex;
@@ -267,7 +274,6 @@
         .search-bar { display: flex; gap: 0.8rem; margin-bottom: 1.2rem; }
         .search-bar input { flex: 1; }
 
-        /* Modal Styles for Edit Form */
         .modal {
             display: none;
             position: fixed;
@@ -310,9 +316,25 @@
             background: none;
         }
 
+        .attendance-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 1rem;
+            justify-content: space-around;
+        }
+        .stat-badge {
+            text-align: center;
+            padding: 0.3rem 0.8rem;
+            border-radius: 1rem;
+        }
+
         @media (max-width: 640px) {
             .top-bar { flex-direction: column; text-align: center; }
             .days-grid { grid-template-columns: repeat(4, 1fr); }
+            .status-btn { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
         }
     </style>
 </head>
@@ -323,7 +345,7 @@
         <div class="logo">
             <div class="logo-text">
                 <h1>📖 Subbulakshmi Venkatesan</h1>
-                <p>Fee & Attendance Management System Made By : K.Thirulingeshwar</p>
+                <p>Fee & Attendance Management System</p>
             </div>
         </div>
         <div class="nav-links">
@@ -343,7 +365,6 @@
         </div>
     </div>
 
-    <!-- Notification Panel -->
     <div class="notification-panel" id="notificationPanel">
         <div style="padding: 0.8rem; font-weight: bold; border-bottom: 1px solid var(--border);">⚠️ Fee Alerts & Reminders</div>
         <div id="notificationList"></div>
@@ -411,10 +432,15 @@
         </div>
     </div>
 
-    <!-- Attendance Page -->
+    <!-- Attendance Page with Present, Absent, No Class -->
     <div id="attendancePage" class="page">
         <div class="card">
             <h2>✅ Mark Attendance</h2>
+            <p style="margin-bottom: 1rem;">📌 <strong>Status Options:</strong> 
+                <span style="background:var(--success); padding:0.2rem 0.5rem; border-radius:0.5rem;">✅ Present</span> 
+                <span style="background:var(--danger); padding:0.2rem 0.5rem; border-radius:0.5rem;">❌ Absent</span> 
+                <span style="background:var(--info); padding:0.2rem 0.5rem; border-radius:0.5rem;">📚 No Class</span>
+            </p>
             <div class="search-bar"><input type="text" id="attendanceSearch" placeholder="🔍 Filter students"></div>
             <div id="studentsAttendanceList"></div>
         </div>
@@ -458,147 +484,78 @@
     let attendanceRecords = [];
     let currentAttendanceSelections = {};
 
-    // Helper function to determine fee status
     function getFeeStatus(student) {
         if (!student.feeAmount || !student.feeDueDay) {
             return { status: 'not_set', message: 'Not set', daysOverdue: 0, color: 'gray' };
         }
-        
         const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth();
-        
         const currentMonthStr = `${currentYear}-${currentMonth + 1}`;
         if (student.feePaidForMonth === currentMonthStr) {
             return { status: 'paid', message: '✅ Paid for this month', daysOverdue: 0, color: 'green' };
         }
-        
         let dueDate = new Date(currentYear, currentMonth, student.feeDueDay);
         if (dueDate < today && dueDate.getMonth() === currentMonth) {
             dueDate = new Date(currentYear, currentMonth + 1, student.feeDueDay);
         }
-        
         const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-        
         if (daysUntilDue < 0) {
-            return { 
-                status: 'overdue', 
-                message: `⚠️ OVERDUE by ${Math.abs(daysUntilDue)} days! Amount: ₹${student.feeAmount}`, 
-                daysOverdue: Math.abs(daysUntilDue),
-                color: 'red'
-            };
+            return { status: 'overdue', message: `⚠️ OVERDUE by ${Math.abs(daysUntilDue)} days! Amount: ₹${student.feeAmount}`, daysOverdue: Math.abs(daysUntilDue), color: 'red' };
         }
         if (daysUntilDue <= 5) {
-            return { 
-                status: 'due_soon', 
-                message: `⏰ Due in ${daysUntilDue} days - ₹${student.feeAmount}`, 
-                daysOverdue: 0,
-                color: 'orange'
-            };
+            return { status: 'due_soon', message: `⏰ Due in ${daysUntilDue} days - ₹${student.feeAmount}`, daysOverdue: 0, color: 'orange' };
         }
-        return { 
-            status: 'upcoming', 
-            message: `📅 Due on ${student.feeDueDay}th - ₹${student.feeAmount}`, 
-            daysOverdue: 0,
-            color: 'green'
-        };
+        return { status: 'upcoming', message: `📅 Due on ${student.feeDueDay}th - ₹${student.feeAmount}`, daysOverdue: 0, color: 'green' };
     }
 
-    // Update notification bell and panel
     function updateNotifications() {
         const overdueStudents = students.filter(s => getFeeStatus(s).status === 'overdue');
         const dueSoonStudents = students.filter(s => getFeeStatus(s).status === 'due_soon');
         const totalNotifications = overdueStudents.length + dueSoonStudents.length;
-        
         document.getElementById('notificationCount').innerText = totalNotifications;
-        
         const notificationList = document.getElementById('notificationList');
         let html = '';
-        
         if (overdueStudents.length > 0) {
             html += `<div style="padding: 0.5rem; background: rgba(239,68,68,0.2); font-weight: bold;">🔴 OVERDUE (${overdueStudents.length})</div>`;
             overdueStudents.forEach(s => {
                 const status = getFeeStatus(s);
-                html += `
-                    <div class="notification-item overdue" data-id="${s.id}">
-                        <div class="notification-title">⚠️ ${escapeHtml(s.name)}</div>
-                        <div class="notification-details">${status.message}</div>
-                        <div class="notification-details">📞 Phone: ${s.phone || 'Not provided'}</div>
-                        <button class="pay-now-btn" onclick="event.stopPropagation(); markFeeAsPaid('${s.id}')">💰 Mark as Paid</button>
-                    </div>
-                `;
+                html += `<div class="notification-item overdue" data-id="${s.id}"><div class="notification-title">⚠️ ${escapeHtml(s.name)}</div><div class="notification-details">${status.message}</div><div class="notification-details">📞 Phone: ${s.phone || 'Not provided'}</div><button class="pay-now-btn" onclick="event.stopPropagation(); markFeeAsPaid('${s.id}')">💰 Mark as Paid</button></div>`;
             });
         }
-        
         if (dueSoonStudents.length > 0) {
             html += `<div style="padding: 0.5rem; background: rgba(245,158,11,0.2); font-weight: bold;">🟡 DUE SOON (${dueSoonStudents.length})</div>`;
             dueSoonStudents.forEach(s => {
                 const status = getFeeStatus(s);
-                html += `
-                    <div class="notification-item" data-id="${s.id}">
-                        <div class="notification-title">⏰ ${escapeHtml(s.name)}</div>
-                        <div class="notification-details">${status.message}</div>
-                        <div class="notification-details">Due date: ${s.feeDueDay}th of month</div>
-                        <button class="pay-now-btn" onclick="event.stopPropagation(); markFeeAsPaid('${s.id}')">💰 Mark as Paid</button>
-                    </div>
-                `;
+                html += `<div class="notification-item" data-id="${s.id}"><div class="notification-title">⏰ ${escapeHtml(s.name)}</div><div class="notification-details">${status.message}</div><div class="notification-details">Due date: ${s.feeDueDay}th of month</div><button class="pay-now-btn" onclick="event.stopPropagation(); markFeeAsPaid('${s.id}')">💰 Mark as Paid</button></div>`;
             });
         }
-        
-        if (totalNotifications === 0) {
-            html = '<div style="padding: 1rem; text-align: center;">✅ All fees are up to date!</div>';
-        }
-        
+        if (totalNotifications === 0) html = '<div style="padding: 1rem; text-align: center;">✅ All fees are up to date!</div>';
         notificationList.innerHTML = html;
-        
         const pendingSum = overdueStudents.reduce((sum, s) => sum + (s.feeAmount || 0), 0);
         document.getElementById('totalPendingFees').innerHTML = `₹${pendingSum}`;
-        
         const bell = document.getElementById('notificationBell');
-        if (totalNotifications > 0) {
-            bell.style.animation = 'shake 0.5s ease infinite';
-        } else {
-            bell.style.animation = 'none';
-        }
+        bell.style.animation = totalNotifications > 0 ? 'shake 0.5s ease infinite' : 'none';
     }
 
-    // Mark fee as paid
     async function markFeeAsPaid(studentId) {
         const student = students.find(s => s.id === studentId);
         if (!student) return;
-        
         const today = new Date();
         const paidForMonth = `${today.getFullYear()}-${today.getMonth() + 1}`;
         const monthName = today.toLocaleString('default', { month: 'long' });
-        
         if (confirm(`Mark fee as PAID for ${student.name} for ${monthName} ${today.getFullYear()}?\nAmount: ₹${student.feeAmount}`)) {
             try {
-                const response = await fetch(`${API_BASE}/api/students/${studentId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        feePaidForMonth: paidForMonth, 
-                        lastFeePaidDate: new Date().toISOString() 
-                    })
-                });
-                
-                if (response.ok) {
-                    await loadStudents();
-                    showToast(`✅ Fee marked as paid for ${student.name} (${monthName} ${today.getFullYear()})`);
-                } else {
-                    showToast('❌ Failed to update fee status');
-                }
-            } catch (error) {
-                showToast('❌ Error updating fee status');
-            }
+                await fetch(`${API_BASE}/api/students/${studentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feePaidForMonth: paidForMonth, lastFeePaidDate: new Date().toISOString() }) });
+                await loadStudents();
+                showToast(`✅ Fee marked as paid for ${student.name}`);
+            } catch (error) { showToast('❌ Error updating fee status'); }
         }
     }
 
-    // Open Edit Modal with student data
     function openEditModal(studentId) {
         const student = students.find(s => s.id === studentId);
         if (!student) return;
-        
         document.getElementById('editStudentId').value = student.id;
         document.getElementById('editStudentName').value = student.name || '';
         document.getElementById('editStudentBranch').value = student.branch || '';
@@ -608,15 +565,11 @@
         document.getElementById('editOutTime').value = student.outTime || '17:00';
         document.getElementById('editFeeAmount').value = student.feeAmount || 2500;
         document.getElementById('editFeeDueDay').value = student.feeDueDay || 15;
-        
         document.getElementById('editStudentModal').style.display = 'flex';
     }
     
-    function closeEditModal() {
-        document.getElementById('editStudentModal').style.display = 'none';
-    }
+    function closeEditModal() { document.getElementById('editStudentModal').style.display = 'none'; }
     
-    // Update student via edit form
     async function updateStudentFromEdit() {
         const studentId = document.getElementById('editStudentId').value;
         const updateData = {
@@ -629,128 +582,57 @@
             feeAmount: parseInt(document.getElementById('editFeeAmount').value) || 2500,
             feeDueDay: parseInt(document.getElementById('editFeeDueDay').value) || 15
         };
-        
-        if (!updateData.name) {
-            showToast('❌ Student name is required');
-            return;
-        }
-        
+        if (!updateData.name) { showToast('❌ Student name is required'); return; }
         try {
-            const response = await fetch(`${API_BASE}/api/students/${studentId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateData)
-            });
-            
-            if (response.ok) {
-                await loadStudents();
-                showToast('✅ Student updated successfully!');
-                closeEditModal();
-            } else {
-                showToast('❌ Failed to update student');
-            }
-        } catch (error) {
-            showToast('❌ Error updating student');
-        }
+            const response = await fetch(`${API_BASE}/api/students/${studentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData) });
+            if (response.ok) { await loadStudents(); showToast('✅ Student updated successfully!'); closeEditModal(); }
+            else showToast('❌ Failed to update student');
+        } catch (error) { showToast('❌ Error updating student'); }
     }
 
     async function loadStudents() {
-        try {
-            const response = await fetch(`${API_BASE}/api/students`);
-            students = await response.json();
-            updateNotifications();
-            renderAll();
-        } catch (error) {
-            console.error('Error loading students:', error);
-        }
+        try { const response = await fetch(`${API_BASE}/api/students`); students = await response.json(); updateNotifications(); renderAll(); } 
+        catch (error) { console.error('Error loading students:', error); }
     }
 
     async function loadAttendance() {
-        try {
-            const response = await fetch(`${API_BASE}/api/attendance`);
-            attendanceRecords = await response.json();
-            renderAll();
-        } catch (error) {
-            console.error('Error loading attendance:', error);
-        }
+        try { const response = await fetch(`${API_BASE}/api/attendance`); attendanceRecords = await response.json(); renderAll(); } 
+        catch (error) { console.error('Error loading attendance:', error); }
     }
 
     async function addStudentToDB(student) {
         try {
-            const response = await fetch(`${API_BASE}/api/students`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(student)
-            });
-            if (response.ok) {
-                await loadStudents();
-                showToast(`✅ Student "${student.name}" added successfully!`);
-                document.getElementById('studentForm').reset();
-                document.querySelectorAll('#addStudentPage .day-checkbox input').forEach(cb => cb.checked = false);
-            }
-        } catch (error) {
-            showToast('❌ Failed to add student');
-        }
+            const response = await fetch(`${API_BASE}/api/students`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(student) });
+            if (response.ok) { await loadStudents(); showToast(`✅ Student "${student.name}" added successfully!`); document.getElementById('studentForm').reset(); document.querySelectorAll('#addStudentPage .day-checkbox input').forEach(cb => cb.checked = false); }
+        } catch (error) { showToast('❌ Failed to add student'); }
     }
 
     async function deleteStudentFromDB(id) {
         const student = students.find(s => s.id === id);
         if (!confirm(`Delete "${student?.name}" and all records?`)) return;
-        try {
-            await fetch(`${API_BASE}/api/students/${id}`, { method: 'DELETE' });
-            await loadStudents();
-            await loadAttendance();
-            showToast(`✅ ${student.name} deleted`);
-        } catch (error) {
-            showToast('❌ Delete failed');
-        }
+        try { await fetch(`${API_BASE}/api/students/${id}`, { method: 'DELETE' }); await loadStudents(); await loadAttendance(); showToast(`✅ ${student.name} deleted`); } 
+        catch (error) { showToast('❌ Delete failed'); }
     }
 
     async function saveIndividualAttendance(studentId) {
         const student = students.find(s => s.id === studentId);
         if (!student) return;
-        
         const selection = currentAttendanceSelections[studentId];
-        if (!selection || !selection.status) {
-            showToast(`❌ Please select Present/Absent for ${student.name}`);
-            return;
-        }
-        
-        const attendanceData = [{
-            studentId: student.id,
-            studentName: student.name,
-            class: student.class || '',
-            branch: student.branch || '',
-            status: selection.status,
-            inTime: selection.inTime || student.inTime || '09:00',
-            outTime: selection.outTime || student.outTime || '17:00',
-            date: selection.date || new Date().toISOString().slice(0,10)
-        }];
-        
+        if (!selection || !selection.status) { showToast(`❌ Please select Present/Absent/No Class for ${student.name}`); return; }
+        const attendanceData = [{ studentId: student.id, studentName: student.name, class: student.class || '', branch: student.branch || '', status: selection.status, inTime: selection.inTime || student.inTime || '09:00', outTime: selection.outTime || student.outTime || '17:00', date: selection.date || new Date().toISOString().slice(0,10) }];
         try {
-            await fetch('/api/attendance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ attendance: attendanceData })
-            });
+            await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendance: attendanceData }) });
             await loadAttendance();
             delete currentAttendanceSelections[studentId];
             showToast(`✅ ${student.name}'s attendance saved!`);
             renderAttendancePageList();
-        } catch (error) {
-            showToast(`❌ Failed to save attendance`);
-        }
+        } catch (error) { showToast(`❌ Failed to save attendance`); }
     }
 
     async function deleteAttendanceRecord(recordId) {
         if (!confirm('Delete this record?')) return;
-        try {
-            await fetch(`/api/attendance/${recordId}`, { method: 'DELETE' });
-            await loadAttendance();
-            showToast('Record deleted!');
-        } catch (error) {
-            showToast('Failed to delete');
-        }
+        try { await fetch(`/api/attendance/${recordId}`, { method: 'DELETE' }); await loadAttendance(); showToast('Record deleted!'); } 
+        catch (error) { showToast('Failed to delete'); }
     }
 
     function showToast(msg) {
@@ -766,33 +648,9 @@
     function renderStudentList(filter = "") {
         const container = document.getElementById('studentsListContainer');
         if (!container) return;
-        
         let filtered = students.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
-        if (filtered.length === 0) {
-            container.innerHTML = `<div class="empty-state">👀 No students found</div>`;
-            return;
-        }
-        
-        container.innerHTML = filtered.map(s => {
-            const feeStatus = getFeeStatus(s);
-            const overdueClass = feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : '');
-            return `
-                <div class="student-list-item ${overdueClass}">
-                    <div>
-                        <h4>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h4>
-                        <p>📚 ${escapeHtml(s.class || '—')} | 📞 ${escapeHtml(s.phone || '—')}</p>
-                        <p>⏰ In: ${s.inTime || '09:00'} | Out: ${s.outTime || '17:00'}</p>
-                        <p class="fee-status" style="color: ${feeStatus.color === 'red' ? '#ef4444' : (feeStatus.color === 'orange' ? '#f59e0b' : '#10b981')}">💰 ${feeStatus.message}</p>
-                    </div>
-                    <div class="action-group">
-                        <button class="icon-btn edit-student" data-id="${s.id}" style="background:var(--accent);">✏️ Edit</button>
-                        <button class="icon-btn delete-student" data-id="${s.id}">🗑️ Delete</button>
-                        ${feeStatus.status !== 'paid' ? `<button class="icon-btn pay-fee" data-id="${s.id}" style="background:var(--success);">💰 Pay Fee</button>` : '<button class="icon-btn" disabled style="opacity:0.5;">✅ Paid</button>'}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
+        if (filtered.length === 0) { container.innerHTML = `<div class="empty-state">👀 No students found</div>`; return; }
+        container.innerHTML = filtered.map(s => { const feeStatus = getFeeStatus(s); const overdueClass = feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : ''); return `<div class="student-list-item ${overdueClass}"><div><h4>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h4><p>📚 ${escapeHtml(s.class || '—')} | 📞 ${escapeHtml(s.phone || '—')}</p><p>⏰ In: ${s.inTime || '09:00'} | Out: ${s.outTime || '17:00'}</p><p class="fee-status" style="color: ${feeStatus.color === 'red' ? '#ef4444' : (feeStatus.color === 'orange' ? '#f59e0b' : '#10b981')}">💰 ${feeStatus.message}</p></div><div class="action-group"><button class="icon-btn edit-student" data-id="${s.id}" style="background:var(--accent);">✏️ Edit</button><button class="icon-btn delete-student" data-id="${s.id}">🗑️ Delete</button>${feeStatus.status !== 'paid' ? `<button class="icon-btn pay-fee" data-id="${s.id}" style="background:var(--success);">💰 Pay Fee</button>` : '<button class="icon-btn" disabled style="opacity:0.5;">✅ Paid</button>'}</div></div>`; }).join('');
         document.querySelectorAll('.edit-student').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
         document.querySelectorAll('.delete-student').forEach(btn => btn.addEventListener('click', () => deleteStudentFromDB(btn.dataset.id)));
         document.querySelectorAll('.pay-fee').forEach(btn => btn.addEventListener('click', () => markFeeAsPaid(btn.dataset.id)));
@@ -801,146 +659,60 @@
     function renderFeeManagementList() {
         const container = document.getElementById('feeStudentsList');
         if (!container) return;
-        
         const searchTerm = document.getElementById('feeSearchInput')?.value.toLowerCase() || "";
         let filtered = students.filter(s => s.name.toLowerCase().includes(searchTerm));
-        
-        if (filtered.length === 0) {
-            container.innerHTML = `<div class="empty-state">No students found</div>`;
-            return;
-        }
-        
-        container.innerHTML = filtered.map(s => {
-            const feeStatus = getFeeStatus(s);
-            const statusClass = feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : '');
-            return `
-                <div class="student-list-item ${statusClass}">
-                    <div style="flex:1">
-                        <h4>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h4>
-                        <p>📞 ${escapeHtml(s.phone || '—')} | 📚 ${escapeHtml(s.class || '—')}</p>
-                        <p><strong>💰 Fee Amount:</strong> ₹${s.feeAmount || 'Not set'}</p>
-                        <p><strong>📅 Due Date:</strong> Every ${s.feeDueDay ? `${s.feeDueDay}th` : 'Not set'} of month</p>
-                        <p><strong>📆 Status:</strong> <span class="badge ${feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : '')}">${feeStatus.message}</span></p>
-                        ${s.lastFeePaidDate ? `<p><small>✅ Last paid: ${new Date(s.lastFeePaidDate).toLocaleDateString()}</small></p>` : ''}
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="icon-btn edit-student-fee" data-id="${s.id}" style="background:var(--accent);">✏️ Edit</button>
-                        ${feeStatus.status !== 'paid' ? `<button class="pay-fee-btn" data-id="${s.id}" style="background:var(--success);padding:0.5rem 1rem;border-radius:1rem;">💰 Mark Paid</button>` : '<button disabled style="background:gray;">✅ Paid</button>'}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
+        if (filtered.length === 0) { container.innerHTML = `<div class="empty-state">No students found</div>`; return; }
+        container.innerHTML = filtered.map(s => { const feeStatus = getFeeStatus(s); const statusClass = feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : ''); return `<div class="student-list-item ${statusClass}"><div style="flex:1"><h4>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h4><p>📞 ${escapeHtml(s.phone || '—')} | 📚 ${escapeHtml(s.class || '—')}</p><p><strong>💰 Fee Amount:</strong> ₹${s.feeAmount || 'Not set'}</p><p><strong>📅 Due Date:</strong> Every ${s.feeDueDay ? `${s.feeDueDay}th` : 'Not set'} of month</p><p><strong>📆 Status:</strong> <span class="badge ${feeStatus.status === 'overdue' ? 'fee-overdue' : (feeStatus.status === 'due_soon' ? 'fee-due-soon' : '')}">${feeStatus.message}</span></p>${s.lastFeePaidDate ? `<p><small>✅ Last paid: ${new Date(s.lastFeePaidDate).toLocaleDateString()}</small></p>` : ''}</div><div style="display: flex; gap: 0.5rem;"><button class="icon-btn edit-student-fee" data-id="${s.id}" style="background:var(--accent);">✏️ Edit</button>${feeStatus.status !== 'paid' ? `<button class="pay-fee-btn" data-id="${s.id}" style="background:var(--success);padding:0.5rem 1rem;border-radius:1rem;">💰 Mark Paid</button>` : '<button disabled style="background:gray;">✅ Paid</button>'}</div></div>`; }).join('');
         document.querySelectorAll('.edit-student-fee').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
         document.querySelectorAll('.pay-fee-btn').forEach(btn => btn.addEventListener('click', () => markFeeAsPaid(btn.dataset.id)));
     }
 
+    // Updated Attendance Page List with Present, Absent, No Class buttons
     function renderAttendancePageList() {
         const container = document.getElementById('studentsAttendanceList');
         if (!container) return;
-        
         const searchTerm = document.getElementById('attendanceSearch')?.value.toLowerCase() || "";
         let filtered = students.filter(s => s.name.toLowerCase().includes(searchTerm));
-        
-        if (filtered.length === 0) {
-            container.innerHTML = `<div class="empty-state">No students found</div>`;
-            return;
-        }
+        if (filtered.length === 0) { container.innerHTML = `<div class="empty-state">No students found</div>`; return; }
         
         container.innerHTML = filtered.map(s => {
-            const sel = currentAttendanceSelections[s.id] || { 
-                status: "Present", 
-                inTime: s.inTime || '09:00', 
-                outTime: s.outTime || '17:00', 
-                date: new Date().toISOString().slice(0,10) 
-            };
-            return `
-                <div class="attendance-card" style="background:rgba(0,0,0,0.4);border-radius:1rem;padding:1rem;margin-bottom:1rem;">
-                    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
-                        <div>
-                            <h3>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h3>
-                            <p>💰 Fee: ₹${s.feeAmount || 'Not set'} | Due: ${s.feeDueDay ? `${s.feeDueDay}th` : 'Not set'}</p>
-                        </div>
-                        <div style="display:flex;gap:0.5rem;">
-                            <button class="status-btn present ${sel.status === 'Present' ? 'selected' : ''}" data-id="${s.id}" data-status="Present">✅ Present</button>
-                            <button class="status-btn absent ${sel.status === 'Absent' ? 'selected' : ''}" data-id="${s.id}" data-status="Absent">❌ Absent</button>
-                        </div>
-                    </div>
-                    <div class="timing-section">
-                        <div class="timing-input"><label>📅 Date:</label><input type="date" id="date_${s.id}" class="date-input" value="${sel.date}"></div>
-                        <div class="timing-input"><label>🕐 In:</label><input type="time" id="inTime_${s.id}" class="in-time-input" value="${sel.inTime}"></div>
-                        <div class="timing-input"><label>🕔 Out:</label><input type="time" id="outTime_${s.id}" class="out-time-input" value="${sel.outTime}"></div>
-                    </div>
-                    <button class="individual-save-btn" data-id="${s.id}">💾 Save ${escapeHtml(s.name)}'s Attendance</button>
-                </div>
-            `;
+            const sel = currentAttendanceSelections[s.id] || { status: "Present", inTime: s.inTime || '09:00', outTime: s.outTime || '17:00', date: new Date().toISOString().slice(0,10) };
+            return `<div class="attendance-card" style="background:rgba(0,0,0,0.4);border-radius:1rem;padding:1rem;margin-bottom:1rem;"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;margin-bottom:0.5rem;"><div><h3>🙏 ${escapeHtml(s.name)} <span class="branch-badge">${escapeHtml(s.branch || '—')}</span></h3><p>💰 Fee: ₹${s.feeAmount || 'Not set'} | Due: ${s.feeDueDay ? `${s.feeDueDay}th` : 'Not set'}</p></div><div style="display:flex;gap:0.5rem;flex-wrap:wrap;"><button class="status-btn present ${sel.status === 'Present' ? 'selected' : ''}" data-id="${s.id}" data-status="Present">✅ Present</button><button class="status-btn absent ${sel.status === 'Absent' ? 'selected' : ''}" data-id="${s.id}" data-status="Absent">❌ Absent</button><button class="status-btn no-class ${sel.status === 'No Class' ? 'selected' : ''}" data-id="${s.id}" data-status="No Class">📚 No Class</button></div></div><div class="timing-section"><div class="timing-input"><label>📅 Date:</label><input type="date" id="date_${s.id}" class="date-input" value="${sel.date}"></div><div class="timing-input"><label>🕐 In:</label><input type="time" id="inTime_${s.id}" class="in-time-input" value="${sel.inTime}"></div><div class="timing-input"><label>🕔 Out:</label><input type="time" id="outTime_${s.id}" class="out-time-input" value="${sel.outTime}"></div></div><button class="individual-save-btn" data-id="${s.id}">💾 Save ${escapeHtml(s.name)}'s Attendance</button></div>`;
         }).join('');
         
         document.querySelectorAll('.status-btn').forEach(btn => btn.addEventListener('click', () => {
             currentAttendanceSelections[btn.dataset.id] = { ...currentAttendanceSelections[btn.dataset.id], status: btn.dataset.status };
             renderAttendancePageList();
         }));
-        document.querySelectorAll('.date-input').forEach(inp => inp.addEventListener('change', e => {
-            const sid = inp.id.replace('date_','');
-            currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], date: e.target.value };
-        }));
-        document.querySelectorAll('.in-time-input').forEach(inp => inp.addEventListener('change', e => {
-            const sid = inp.id.replace('inTime_','');
-            currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], inTime: e.target.value };
-        }));
-        document.querySelectorAll('.out-time-input').forEach(inp => inp.addEventListener('change', e => {
-            const sid = inp.id.replace('outTime_','');
-            currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], outTime: e.target.value };
-        }));
+        document.querySelectorAll('.date-input').forEach(inp => inp.addEventListener('change', e => { const sid = inp.id.replace('date_',''); currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], date: e.target.value }; }));
+        document.querySelectorAll('.in-time-input').forEach(inp => inp.addEventListener('change', e => { const sid = inp.id.replace('inTime_',''); currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], inTime: e.target.value }; }));
+        document.querySelectorAll('.out-time-input').forEach(inp => inp.addEventListener('change', e => { const sid = inp.id.replace('outTime_',''); currentAttendanceSelections[sid] = { ...currentAttendanceSelections[sid], outTime: e.target.value }; }));
         document.querySelectorAll('.individual-save-btn').forEach(btn => btn.addEventListener('click', () => saveIndividualAttendance(btn.dataset.id)));
     }
 
     function renderRecordsPage(filter = "") {
         const container = document.getElementById('allRecordsContainer');
         if (!container) return;
-        
         let records = [...attendanceRecords].sort((a,b) => new Date(b.date) - new Date(a.date));
         if (filter) records = records.filter(r => r.studentName.toLowerCase().includes(filter.toLowerCase()) || (r.date && r.date.includes(filter)));
-        
-        if (records.length === 0) {
-            container.innerHTML = `<div class="empty-state">📭 No records found</div>`;
-            return;
-        }
-        
-        container.innerHTML = records.map(rec => `
-            <div class="record-item">
-                <div>
-                    <h4>🙏 ${escapeHtml(rec.studentName)}</h4>
-                    <div>📅 ${rec.date} | 🟢 In: ${rec.inTime || '—'} | 🔴 Out: ${rec.outTime || '—'}</div>
-                </div>
-                <div>
-                    <span class="badge ${rec.status.toLowerCase()}">${rec.status}</span>
-                    <button class="icon-btn delete-attendance" data-id="${rec.id}">🗑️ Delete</button>
-                </div>
-            </div>
-        `).join('');
-        
+        if (records.length === 0) { container.innerHTML = `<div class="empty-state">📭 No records found</div>`; return; }
+        container.innerHTML = records.map(rec => `<div class="record-item"><div><h4>🙏 ${escapeHtml(rec.studentName)}</h4><div>📅 ${rec.date} | 🟢 In: ${rec.inTime || '—'} | 🔴 Out: ${rec.outTime || '—'}</div></div><div><span class="badge ${rec.status === 'Present' ? 'present' : (rec.status === 'Absent' ? 'absent' : 'no-class')}">${rec.status}</span><button class="icon-btn delete-attendance" data-id="${rec.id}">🗑️ Delete</button></div></div>`).join('');
         document.querySelectorAll('.delete-attendance').forEach(btn => btn.addEventListener('click', () => deleteAttendanceRecord(btn.dataset.id)));
     }
 
     function updateDashboardStats() {
         document.getElementById('totalStudentsCount').innerText = students.length;
-        
         const today = new Date().toISOString().slice(0,10);
         const todayRecords = attendanceRecords.filter(r => r.date === today);
         const presentToday = todayRecords.filter(r => r.status === "Present").length;
         document.getElementById('todayAttendanceCount').innerHTML = todayRecords.length ? `${presentToday} / ${todayRecords.length}` : "0 / 0";
-        
         const totalPresent = attendanceRecords.filter(r => r.status === "Present").length;
         const overallPercent = attendanceRecords.length ? (totalPresent / attendanceRecords.length * 100).toFixed(1) : 0;
         document.getElementById('overallPercentText').innerHTML = `${overallPercent}% overall (${totalPresent}/${attendanceRecords.length})`;
         document.getElementById('overallProgressBar').style.width = `${overallPercent}%`;
-        
         const recent = [...attendanceRecords].slice(-5).reverse();
         const recentDiv = document.getElementById('recentAttendanceList');
-        if (recentDiv) {
-            recentDiv.innerHTML = recent.map(r => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border);">📌 ${r.studentName} - ${r.date} | <strong>${r.status}</strong></div>`).join('') || "<div class='empty-state'>No records</div>";
-        }
+        if (recentDiv) recentDiv.innerHTML = recent.map(r => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border);">📌 ${r.studentName} - ${r.date} | <strong class="badge ${r.status === 'Present' ? 'present' : (r.status === 'Absent' ? 'absent' : 'no-class')}">${r.status}</strong></div>`).join('') || "<div class='empty-state'>No records</div>";
     }
 
     function renderAll() {
@@ -951,95 +723,37 @@
         updateDashboardStats();
     }
 
-    // Event Listeners
     document.getElementById('studentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('studentName').value.trim();
         if (!name) { alert("Name required"); return; }
-        
         const days = [...document.querySelectorAll('#addStudentPage .day-checkbox input:checked')].map(cb => cb.value);
-        
-        await addStudentToDB({
-            name,
-            branch: document.getElementById('studentBranch').value.trim(),
-            class: document.getElementById('studentClass').value.trim(),
-            days: days,
-            inTime: document.getElementById('defaultInTime').value,
-            outTime: document.getElementById('defaultOutTime').value,
-            phone: document.getElementById('phone').value.trim(),
-            feeAmount: parseInt(document.getElementById('feeAmount').value) || 2500,
-            feeDueDay: parseInt(document.getElementById('feeDueDay').value) || 15,
-            feePaidForMonth: null,
-            lastFeePaidDate: null
-        });
+        await addStudentToDB({ name, branch: document.getElementById('studentBranch').value.trim(), class: document.getElementById('studentClass').value.trim(), days: days, inTime: document.getElementById('defaultInTime').value, outTime: document.getElementById('defaultOutTime').value, phone: document.getElementById('phone').value.trim(), feeAmount: parseInt(document.getElementById('feeAmount').value) || 2500, feeDueDay: parseInt(document.getElementById('feeDueDay').value) || 15, feePaidForMonth: null, lastFeePaidDate: null });
     });
     
-    document.getElementById('editStudentForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await updateStudentFromEdit();
-    });
-
-    document.getElementById('notificationBell')?.addEventListener('click', () => {
-        document.getElementById('notificationPanel').classList.toggle('show');
-    });
-    
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.notification-bell') && !e.target.closest('.notification-panel')) {
-            document.getElementById('notificationPanel').classList.remove('show');
-        }
-    });
-
+    document.getElementById('editStudentForm')?.addEventListener('submit', async (e) => { e.preventDefault(); await updateStudentFromEdit(); });
+    document.getElementById('notificationBell')?.addEventListener('click', () => { document.getElementById('notificationPanel').classList.toggle('show'); });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.notification-bell') && !e.target.closest('.notification-panel')) document.getElementById('notificationPanel').classList.remove('show'); });
     document.getElementById('studentSearchInput')?.addEventListener('input', (e) => renderStudentList(e.target.value));
     document.getElementById('feeSearchInput')?.addEventListener('input', () => renderFeeManagementList());
     document.getElementById('attendanceSearch')?.addEventListener('input', () => renderAttendancePageList());
     document.getElementById('recordsSearchInput')?.addEventListener('input', (e) => renderRecordsPage(e.target.value));
 
-    // Navigation
     const pages = ['dashboardPage', 'addStudentPage', 'attendancePage', 'recordsPage', 'feeManagementPage'];
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const pageId = btn.dataset.page + 'Page';
-            pages.forEach(p => document.getElementById(p).classList.remove('active-page'));
-            document.getElementById(pageId).classList.add('active-page');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            if (pageId === 'feeManagementPage') renderFeeManagementList();
-            if (pageId === 'dashboardPage') updateDashboardStats();
-        });
-    });
+    document.querySelectorAll('.nav-btn').forEach(btn => { btn.addEventListener('click', () => { const pageId = btn.dataset.page + 'Page'; pages.forEach(p => document.getElementById(p).classList.remove('active-page')); document.getElementById(pageId).classList.add('active-page'); document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); if (pageId === 'feeManagementPage') renderFeeManagementList(); if (pageId === 'dashboardPage') updateDashboardStats(); }); });
 
-    // Dark Mode
     const darkToggle = document.getElementById('darkModeToggle');
-    darkToggle?.addEventListener('click', () => {
-        document.body.classList.toggle('dark');
-        localStorage.setItem('dark_mode', document.body.classList.contains('dark'));
-        darkToggle.textContent = document.body.classList.contains('dark') ? '☀️ Light Mode' : '🌙 Dark Mode';
-    });
+    darkToggle?.addEventListener('click', () => { document.body.classList.toggle('dark'); localStorage.setItem('dark_mode', document.body.classList.contains('dark')); darkToggle.textContent = document.body.classList.contains('dark') ? '☀️ Light Mode' : '🌙 Dark Mode'; });
     if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark');
 
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const modal = document.getElementById('editStudentModal');
-        if (event.target === modal) {
-            closeEditModal();
-        }
-    }
+    window.onclick = function(event) { const modal = document.getElementById('editStudentModal'); if (event.target === modal) closeEditModal(); }
 
-    // Initial load
     loadStudents();
     loadAttendance();
     document.querySelector('.nav-btn[data-page="dashboard"]').click();
 
     const style = document.createElement('style');
-    style.textContent = `
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-3px); }
-            75% { transform: translateX(3px); }
-        }
-        .progress-bar-container { background: rgba(0,0,0,0.4); border-radius: 1rem; height: 12px; overflow: hidden; }
-        .empty-state { text-align: center; padding: 2rem; color: var(--text-secondary); }
-    `;
+    style.textContent = `@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } } .progress-bar-container { background: rgba(0,0,0,0.4); border-radius: 1rem; height: 12px; overflow: hidden; } .empty-state { text-align: center; padding: 2rem; color: var(--text-secondary); }`;
     document.head.appendChild(style);
 </script>
 </body>
